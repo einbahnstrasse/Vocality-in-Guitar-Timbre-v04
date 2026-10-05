@@ -271,7 +271,14 @@
     try {
       // text/plain keeps this a "simple" request, so the browser skips the CORS preflight
       // that Apps Script cannot answer.
-      const res = await fetch(SHEET_URL, { method: 'POST', body, headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
+      // keepalive lets the save finish even if the participant closes the tab right after
+      // submitting (browsers allow it for bodies under 64 KB).
+      const res = await fetch(SHEET_URL, {
+        method: 'POST',
+        body,
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        keepalive: body.length < 60000,
+      });
       const json = await res.json();
       busy = !!json.busy;
       if (!json.ok) throw new Error(json.error || 'rejected');

@@ -49,6 +49,10 @@ calibration/   volume reference sound
 apps-script/   Code.gs: the Google Sheet collector (the copy in Google is pasted from this)
 archive/       the April 2026 React scaffold, kept for reference only
 .nojekyll      tells GitHub Pages to serve the files as they are
+tests/         node tests/apps-script.test.mjs: checks Code.gs against an imitation of Google Sheets
+docs/context/  project context and decisions (mirrored from Claude Code's memory)
+docs/handoffs/ one handoff note per work session: what changed, open items
+CLAUDE.md      instructions Claude Code reads at the start of every session
 ```
 
 Wording is edited in `questions.js` (question prompts and button labels) and `index.html` (front page,
