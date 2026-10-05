@@ -172,6 +172,7 @@
   let syncTimer = null;
   let syncing = false;
   let failures = 0;
+  let revision = 0;     // bumped on every change; a save only counts if nothing changed since it was sent
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -237,8 +238,13 @@
 
   function setSync(text) { $('sync').textContent = text; }
 
-  function scheduleSync(delay = 1500) {
+  function markChanged() {
+    revision++;
     state.synced = false;
+  }
+
+  function scheduleSync(delay = 1500) {
+    markChanged();
     saveState();
     clearTimeout(syncTimer);
     syncTimer = setTimeout(sync, delay);
@@ -251,10 +257,16 @@
       setSync('Not saving: no Google Sheet configured');
       return false;
     }
-    if (syncing) { scheduleSync(); return false; }
+    if (syncing) {                           // one save at a time; try again shortly
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(sync, 1500);
+      return false;
+    }
     syncing = true;
     setSync('Saving…');
     const body = JSON.stringify(payload());
+    const sentRevision = revision;
+    const sentComplete = state.status === 'complete';
     let busy = false;
     try {
       // text/plain keeps this a "simple" request, so the browser skips the CORS preflight
@@ -263,11 +275,16 @@
       const json = await res.json();
       busy = !!json.busy;
       if (!json.ok) throw new Error(json.error || 'rejected');
-      state.synced = true;
       failures = 0;
+      if (revision !== sentRevision) {
+        // Something changed while this save was on its way (e.g. Submit): send the newer version.
+        syncTimer = setTimeout(sync, 0);
+        return false;
+      }
+      state.synced = true;
       saveState();
       setSync('Saved ✓');
-      if (state.screen === 'done') {
+      if (state.screen === 'done' && sentComplete) {
         $('done-status').textContent = 'Your answers have been saved.';
         $('fallback').hidden = true;
       }
@@ -580,7 +597,7 @@
     state.volumeChanged = changed.value;
     state.status = 'complete';
     state.completedAt = new Date().toISOString();
-    state.synced = false;                    // the completed version still has to be sent
+    markChanged();                           // the completed version still has to be sent
     saveState();
     showDone();
   });
