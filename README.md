@@ -53,8 +53,26 @@ instead of saved.
 6. Check it works: open the URL in a browser and you should see `{"ok":true,...}`. Then take the
    test once; a `Responses` tab appears with your row.
 
-If you edit `Code.gs` later, use **Deploy → Manage deployments → Edit → New version** so the URL
-stays the same.
+7. Turn on the daily email: in the Apps Script editor, pick **`setup`** in the function menu next to
+   **Run**, click **Run**, and approve the permissions. A "monitoring is on" email confirms it.
+
+If you edit `Code.gs` later, use **Deploy → Manage deployments → Edit → Version: New version → Deploy**
+so the URL stays the same. A dialog saying "An error occurred" means the deploy failed: reload the
+page and try again (signing in with only one Google account helps). Visiting the web app URL shows
+`scriptVersion`, so you can confirm which version is live.
+
+### Monitoring
+
+- **Health check:** visiting the web app URL writes to the sheet and returns `{"ok":true,...}`. It
+  returns `"ok":false` if the sheet can't be written or is more than 80% full (Google Sheets holds
+  10 million cells, roughly 20,000 participants).
+- **Uptime monitor (recommended):** a free service such as UptimeRobot can load the web app URL every
+  5 minutes and email you if the response doesn't contain `"ok":true` (use a *keyword* monitor).
+- **Error emails:** if saving fails, the script owner gets an email, at most one per hour.
+- **Daily summary:** every morning, yesterday's sessions started/completed, errors, and capacity used.
+- **Busy periods:** saves are handled one at a time; when the queue is long the site waits and
+  retries, keeping answers on the participant's device meanwhile. If the final submit still can't
+  get through, the participant sees their answers with a copy button, and the site keeps retrying.
 
 Before the questions, a setup screen asks whether the participant is on headphones or speakers,
 what kind, the connection (wired/Bluetooth), make/model, and has them set a comfortable volume
@@ -62,9 +80,22 @@ using `calibration/reference_pink_noise.wav` (pink noise at the average level of
 stimulus). Browsers cannot read the system volume, so participants estimate it (0–100% or
 "don't know"), and the review screen asks whether they changed the volume during the test.
 
-Each participant gets **one row**, updated after every answer (`status` = `in progress`, then
-`complete` on submit), so partial sessions are kept too. Columns `Q1`–`Q17` hold the chosen letter.
-`detail_json` holds play counts per sound, answer changes and time per question.
+The sheet has two tabs, both updated after every answer, so partial sessions are kept too:
+
+Every session gets a readable `participant_id`: `LAST-First-YYYYMMDD-HHMMSS` (when the session
+started, participant's local time), so a retake shows up as a separate id.
+
+- **Responses**: one row per participant. `status` (`in progress`, then `complete` on submit),
+  `Q1`–`Q17` (chosen letter), the listening setup, and a summary: `total_minutes`, `total_plays`,
+  `full_listen_pct` (share of plays heard to the end), `setup_sec`, `review_sec`.
+- **Listening**: one row per participant × question (17 per participant), written on submit: `answer`,
+  `answer_changes`, `question_time_sec`, and for each play button (`test`, `A`–`D`) three columns:
+  `_plays` (times pressed), `_full` (plays heard to the end) and `_sec` (seconds heard). `test` is the
+  top button (test vocal sample / vowel sound); Part 2 has no `D`, so those cells are blank.
+  Safe to sort and filter.
+
+Time on a page only counts while it is visible (a hidden tab or locked phone pauses it).
+`detail_json` keeps the raw data behind both tabs.
 
 ## Publish (GitHub Pages)
 

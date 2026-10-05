@@ -10,16 +10,18 @@
   const PART_TEXT = {
     1: {
       title: 'Part 1',
-      instructions: 'Choose which of the following sounds most resembles the test sample.',
+      instructions: 'Choose which of the following guitar melodies most resembles the test vocal sample.',
       prompt: 'Which answer corresponds best?',
-      testLabel: 'Test sample',
-      optionHint: 'Guitar',
+      testLabel: 'Test vocal sample',
+      optionLabel: 'Guitar melody',   // button reads "Guitar melody A"
+      optionHint: '',
     },
     2: {
       title: 'Part 2',
       instructions: 'Each option plays the vowel sound, then a guitar sound.',
       prompt: 'Which guitar sound most closely matches the vowel sound?',
       testLabel: 'Vowel sound',
+      optionLabel: '',                // button reads "A"
       optionHint: 'Vowel + guitar',
     },
   };

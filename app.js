@@ -16,11 +16,11 @@
 
   function newState(lastName, firstName) {
     return {
-      sessionId: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)),
+      sessionId: participantId(lastName, firstName, new Date()),
       lastName,
       firstName,
       setup: null,           // listening equipment + volume answers from the setup screen
-      referencePlays: 0,     // times the volume reference was played
+      reference: { n: 0, full: 0, ms: 0 },   // volume-reference listening, as in `listen`
       volumeChanged: null,   // asked on the review screen
       startedAt: new Date().toISOString(),
       completedAt: null,
@@ -28,15 +28,31 @@
       screen: 'setup',
       index: 0,
       answers: {},   // question number → letter
-      plays: {},     // question number → { T: n, A: n, ... }
+      listen: {},    // question number → { test|A|B…: { n: plays, full: plays heard to the end, ms: time heard } }
       changes: {},   // question number → times the answer was changed
-      timeMs: {},    // question number → time spent on the question
+      timeMs: {},    // question number, 'setup' or 'review' → time on that page (tab hidden = not counted)
       synced: false,
     };
   }
 
+  // Readable, unique per session: LAST-First-YYYYMMDD-HHMMSS (participant's local time).
+  function participantId(last, first, d) {
+    const clean = (x) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '');
+    const p = (n) => String(n).padStart(2, '0');
+    const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+    return `${clean(last) || 'X'}-${clean(first) || 'X'}-${stamp}`;
+  }
+
   function loadState() {
-    try { return JSON.parse(localStorage.getItem(STORE_KEY)); } catch { return null; }
+    let s = null;
+    try { s = JSON.parse(localStorage.getItem(STORE_KEY)); } catch { /* unreadable: start fresh */ }
+    if (!s) return null;
+    // Sessions saved by an earlier version of the site lack these fields.
+    s.listen ||= {};
+    s.reference ||= { n: s.referencePlays || 0, full: 0, ms: 0 };
+    s.timeMs ||= {};
+    s.changes ||= {};
+    return s;
   }
 
   function saveState() {
@@ -82,15 +98,24 @@
     keep.forEach((f) => getBuffer(f).catch(() => {}));
   }
 
+  // Credits the time heard to the play's stats; `completed` = it reached the end.
+  function finish(session, completed) {
+    const heard = completed ? session.durMs : (ctx.currentTime - session.startAt) * 1000;
+    session.stat.ms += Math.round(Math.min(Math.max(heard, 0), session.durMs));
+    if (completed) session.stat.full++;
+    saveState();
+  }
+
   function stopPlayback() {
     if (!playing) return;
     playing.sources.forEach((s) => { s.onended = null; try { s.stop(); } catch { /* already stopped */ } });
     playing.button.classList.remove('playing');
+    finish(playing, false);
     playing = null;
   }
 
-  // Plays the urls back to back; onPlayed runs once playback actually starts.
-  async function play(urls, button, onPlayed) {
+  // Plays the urls back to back. getStat() returns the { n, full, ms } record to update.
+  async function play(urls, button, getStat) {
     const wasThisButton = playing && playing.button === button;
     stopPlayback();
     if (wasThisButton) return;               // second tap on the same button = stop
@@ -108,7 +133,8 @@
     button.classList.remove('loading');
     stopPlayback();                          // another button may have started while loading
 
-    let t = ctx.currentTime + 0.05;
+    const startAt = ctx.currentTime + 0.05;
+    let t = startAt;
     const sources = decoded.map((buf) => {
       const src = ctx.createBufferSource();
       src.buffer = buf;
@@ -117,22 +143,26 @@
       t += buf.duration + PAIR_GAP_SEC;
       return src;
     });
-    const session = { sources, button };
+    const stat = getStat();
+    stat.n++;
+    const durMs = (t - PAIR_GAP_SEC - startAt) * 1000;
+    const session = { sources, button, stat, startAt, durMs };
     sources[sources.length - 1].onended = () => {
-      if (playing === session) { button.classList.remove('playing'); playing = null; }
+      if (playing !== session) return;
+      button.classList.remove('playing');
+      playing = null;
+      finish(session, true);
     };
     playing = session;
     button.classList.add('playing');
-
-    onPlayed();
     saveState();
   }
 
-  function countPlay(key) {
+  function statFor(key) {
     return () => {
       const q = QUESTIONS[state.index];
-      const counts = (state.plays[q.number] ||= {});
-      counts[key] = (counts[key] || 0) + 1;
+      const byButton = (state.listen[q.number] ||= {});
+      return (byButton[key] ||= { n: 0, full: 0, ms: 0 });
     };
   }
 
@@ -141,6 +171,9 @@
 
   let syncTimer = null;
   let syncing = false;
+  let failures = 0;
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   function payload() {
     return {
@@ -152,11 +185,53 @@
       startedAt: state.startedAt,
       completedAt: state.completedAt,
       setup: state.setup,
-      referencePlays: state.referencePlays,
+      referencePlays: state.reference.n,
       volumeChanged: state.volumeChanged,
       device: navigator.userAgent,
       version: VERSION,
-      detail: { plays: state.plays, changes: state.changes, timeMs: state.timeMs },
+      summary: summary(),
+      rows: state.status === 'complete' ? listeningRows() : undefined,   // Listening tab: on submit only
+      detail: { listen: state.listen, reference: state.reference, changes: state.changes, timeMs: state.timeMs },
+    };
+  }
+
+  const sec = (ms) => Math.round((ms || 0) / 100) / 10;
+
+  // One row per question for the sheet's "Listening" tab; each play button gets
+  // <button>_plays, <button>_full (plays heard to the end) and <button>_sec (seconds heard).
+  // Keys match the tab's column names.
+  function listeningRows() {
+    return QUESTIONS.map((q) => {
+      const row = {
+        question: q.number,
+        part: q.part,
+        test_file: q.test,
+        answer: state.answers[q.number] || '',
+        answer_changes: state.changes[q.number] || 0,
+        question_time_sec: sec(state.timeMs[q.number]),
+      };
+      for (const button of ['test', ...Object.keys(q.options)]) {
+        const st = (state.listen[q.number] || {})[button] || { n: 0, full: 0, ms: 0 };
+        row[`${button}_plays`] = st.n;
+        row[`${button}_full`] = st.full;
+        row[`${button}_sec`] = sec(st.ms);
+      }
+      return row;
+    });
+  }
+
+  function summary() {
+    let plays = 0, full = 0;
+    for (const byButton of Object.values(state.listen)) {
+      for (const st of Object.values(byButton)) { plays += st.n; full += st.full; }
+    }
+    const totalMs = Object.values(state.timeMs).reduce((a, b) => a + b, 0);
+    return {
+      setupSec: sec(state.timeMs.setup),
+      reviewSec: sec(state.timeMs.review),
+      totalMinutes: Math.round(totalMs / 6000) / 10,
+      totalPlays: plays,
+      fullListenPct: plays ? Math.round((full / plays) * 100) : '',
     };
   }
 
@@ -180,23 +255,46 @@
     syncing = true;
     setSync('Saving…');
     const body = JSON.stringify(payload());
+    let busy = false;
     try {
       // text/plain keeps this a "simple" request, so the browser skips the CORS preflight
       // that Apps Script cannot answer.
       const res = await fetch(SHEET_URL, { method: 'POST', body, headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
       const json = await res.json();
+      busy = !!json.busy;
       if (!json.ok) throw new Error(json.error || 'rejected');
       state.synced = true;
+      failures = 0;
       saveState();
       setSync('Saved ✓');
+      if (state.screen === 'done') {
+        $('done-status').textContent = 'Your answers have been saved.';
+        $('fallback').hidden = true;
+      }
       return true;
     } catch (err) {
       console.warn('Sync failed:', err);
-      setSync('Offline: answers kept on this device, will retry');
+      setSync(busy ? 'Server busy: answers kept on this device, retrying' : 'Offline: answers kept on this device, retrying');
+      // Retry in the background with growing, jittered waits (5 s, 10 s, 20 s … up to 2 min)
+      // so a crowd of participants doesn't hit the server in lockstep.
+      failures++;
+      const wait = Math.min(5000 * 2 ** (failures - 1), 120000) * (0.75 + Math.random() * 0.5);
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(sync, wait);
       return false;
     } finally {
       syncing = false;
     }
+  }
+
+  // For the final submit: a few quick attempts before showing the copy-and-email fallback.
+  async function syncNow(attempts = 4) {
+    for (let i = 0; i < attempts; i++) {
+      while (syncing) await sleep(300);
+      if (await sync()) return true;
+      if (i < attempts - 1) await sleep(2000 * 2 ** i);   // 2 s, 4 s, 8 s
+    }
+    return false;
   }
 
   window.addEventListener('online', () => { if (state && !state.synced) sync(); });
@@ -207,22 +305,69 @@
 
   function show(name) {
     stopPlayback();
+    stopTimer();
     screens.forEach((s) => ($(`screen-${s}`).hidden = s !== name));
-    if (state) { state.screen = name; saveState(); }
+    if (state) { state.screen = name; startTimer(); saveState(); }
+    // Overview is available once setup is done and until the answers are submitted.
+    $('overview-btn').hidden = name !== 'question';
     window.scrollTo(0, 0);
   }
 
-  // Time on question: counted while the question screen is visible.
-  let enteredAt = null;
-  function startTimer() { enteredAt = Date.now(); }
+  // ------------------------------------------------ privacy notice
+
+  const privacy = $('privacy');
+  $('privacy-open').addEventListener('click', () => {
+    privacy.showModal();
+    $('privacy-title').focus();              // start at the top, not at the Close button
+    privacy.scrollTop = 0;
+  });
+  $('privacy-close').addEventListener('click', () => privacy.close());
+  // Tapping the dimmed area outside the notice closes it too.
+  privacy.addEventListener('click', (e) => {
+    const r = privacy.getBoundingClientRect();
+    const outside = e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    if (outside) privacy.close();
+  });
+
+  // ------------------------------------------------ toolbar
+
+  $('overview-btn').addEventListener('click', () => showReview());
+
+  // Light/dark: follows the device until the participant picks one; the choice is remembered.
+  const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  function currentTheme() {
+    return document.documentElement.dataset.theme || (darkQuery.matches ? 'dark' : 'light');
+  }
+  function renderThemeButton() {
+    const dark = currentTheme() === 'dark';
+    $('theme-btn').textContent = dark ? '☀ Light mode' : '☾ Dark mode';
+  }
+  $('theme-btn').addEventListener('click', () => {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('vigt-theme', next); } catch { /* not remembered, still applied */ }
+    renderThemeButton();
+  });
+  darkQuery.addEventListener?.('change', renderThemeButton);
+  renderThemeButton();
+
+  // Time on page: counted while the setup, question or review screen is visible.
+  let timer = null;   // { key, since }
+  function timerKey() {
+    if (state.screen === 'question') return QUESTIONS[state.index].number;
+    return state.screen === 'setup' || state.screen === 'review' ? state.screen : null;
+  }
+  function startTimer() {
+    const key = timerKey();
+    timer = key == null || document.hidden ? null : { key, since: Date.now() };
+  }
   function stopTimer() {
-    if (enteredAt == null || !state) return;
-    const n = QUESTIONS[state.index].number;
-    state.timeMs[n] = (state.timeMs[n] || 0) + (Date.now() - enteredAt);
-    enteredAt = null;
+    if (!timer || !state) return;
+    state.timeMs[timer.key] = (state.timeMs[timer.key] || 0) + (Date.now() - timer.since);
+    timer = null;
   }
   document.addEventListener('visibilitychange', () => {
-    if (!state || state.screen !== 'question') return;
+    if (!state) return;
     if (document.hidden) { stopTimer(); saveState(); } else startTimer();
   });
 
@@ -272,7 +417,7 @@
   setupForm.addEventListener('change', updateSetupForm);
 
   $('ref-btn').addEventListener('click', () =>
-    play([CALIBRATION_FILE], $('ref-btn'), () => { state.referencePlays++; $('setup-error').hidden = true; }));
+    play([CALIBRATION_FILE], $('ref-btn'), () => { $('setup-error').hidden = true; return state.reference; }));
 
   setupForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -285,7 +430,7 @@
       !type ? `Please choose what kind of ${listening === 'headphones' ? 'headphones' : 'speakers'} you are using.` :
       listening === 'headphones' && !f.get('connection') ? 'Please say how your headphones are connected.' :
       type === 'other' && !model ? 'Please describe what you are listening through.' :
-      state.referencePlays === 0 ? 'Please play the volume reference and set a comfortable volume.' :
+      state.reference.n === 0 ? 'Please play the volume reference and set a comfortable volume.' :
       '';
     $('setup-error').hidden = !problem;
     $('setup-error').textContent = problem;
@@ -305,12 +450,11 @@
   // ------------------------------------------------ question
 
   function goTo(index) {
-    stopTimer();
+    stopTimer();                             // credit the page being left before the index changes
     state.index = index;
     show('question');
     renderQuestion();
     prefetchAround(index);
-    startTimer();
     saveState();
   }
 
@@ -348,7 +492,7 @@
     const testBtn = $('test-btn');
     testBtn.classList.remove('playing', 'loading');
     testBtn.querySelector('.label').textContent = text.testLabel;
-    testBtn.onclick = () => play([stim(q.test)], testBtn, countPlay('T'));
+    testBtn.onclick = () => play([stim(q.test)], testBtn, statFor('test'));
 
     const box = $('options');
     box.innerHTML = '';
@@ -360,9 +504,10 @@
       const playBtn = document.createElement('button');
       playBtn.type = 'button';
       playBtn.className = 'play';
-      playBtn.innerHTML = `<span class="icon" aria-hidden="true"></span><span>${letter}</span><span class="hint">${text.optionHint}</span>`;
-      playBtn.setAttribute('aria-label', `Play ${letter}`);
-      playBtn.addEventListener('click', () => play(files.map(stim), playBtn, countPlay(letter)));
+      const name = text.optionLabel ? `${text.optionLabel} ${letter}` : letter;
+      playBtn.innerHTML = `<span class="icon" aria-hidden="true"></span><span>${name}</span><span class="hint">${text.optionHint}</span>`;
+      playBtn.setAttribute('aria-label', `Play ${name}`);
+      playBtn.addEventListener('click', () => play(files.map(stim), playBtn, statFor(letter)));
 
       const choose = document.createElement('button');
       choose.type = 'button';
@@ -402,7 +547,6 @@
   // ------------------------------------------------ review
 
   function showReview() {
-    stopTimer();
     show('review');
     const list = $('review-list');
     list.innerHTML = '';
@@ -425,7 +569,8 @@
     warn.textContent = `${missing} question${missing === 1 ? ' is' : 's are'} unanswered. You can still submit.`;
   }
 
-  $('review-back').addEventListener('click', () => goTo(TOTAL - 1));
+  // Back to the question the participant came from.
+  $('review-back').addEventListener('click', () => goTo(state.index));
 
   $('submit-btn').addEventListener('click', () => {
     const changed = document.querySelector('input[name=volumeChanged]:checked');
@@ -444,8 +589,10 @@
   async function showDone() {
     show('done');
     $('fallback').hidden = true;
+    // Already saved (e.g. the page was reloaded after submitting): don't send again.
+    if (state.synced) { $('done-status').textContent = 'Your answers have been saved.'; return; }
     $('done-status').textContent = SHEET_URL ? 'Sending your answers…' : '';
-    const ok = await sync();
+    const ok = await syncNow();
     if (ok) {
       $('done-status').textContent = 'Your answers have been saved.';
     } else if (SHEET_URL) {

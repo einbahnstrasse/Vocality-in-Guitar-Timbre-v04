@@ -5,18 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex">
   <title>Vocality in Guitar Timbre</title>
+  <script>
+    // Apply a saved light/dark choice before the page paints.
+    try { var t = localStorage.getItem('vigt-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main id="app">
+    <div class="topbar">
+      <button id="overview-btn" type="button" hidden>All questions</button>
+      <button id="theme-btn" type="button"></button>
+    </div>
 
     <!-- Registration -->
     <section id="screen-register" class="screen" hidden>
       <h1>Vocality in Guitar Timbre</h1>
       <p class="lede">A listening test of 17 questions in two parts.</p>
       <ul class="intro">
-        <li><strong>Part 1:</strong> choose which of the following sounds most resembles the test sample.</li>
+        <li><strong>Part 1:</strong> choose which of the following guitar melodies most resembles the test vocal sample.</li>
         <li><strong>Part 2:</strong> choose which guitar sound most closely matches the vowel sound.</li>
         <li>Play every sound as many times as you like, in any order, before answering.</li>
         <li>Headphones are best. On a phone, turn off silent mode.</li>
@@ -30,7 +38,55 @@
         </label>
         <button type="submit" class="primary">Continue</button>
       </form>
+      <p class="privacy-link"><button id="privacy-open" type="button" class="link">How your data is used</button></p>
+
+      <footer class="credits">
+        <p>Experimental design by Jason Noble, with assistance from the ACTOR Vocality Working Group, now a part of
+          the Timbre &amp; Orchestration Network (TONE) Partnership Project.</p>
+        <p>Site designed and implemented by Louis Goldford and Gabriel Couturier.</p>
+      </footer>
     </section>
+
+    <!-- Privacy notice -->
+    <dialog id="privacy" aria-labelledby="privacy-title">
+      <h2 id="privacy-title" tabindex="-1">How your data is used</h2>
+      <p>This listening test is part of research on vocality in guitar timbre by the ACTOR Vocality
+        Working Group, now a part of the Timbre &amp; Orchestration Network (TONE) Partnership Project. Here is exactly what the site records and what happens to it.</p>
+
+      <h3>What we record</h3>
+      <ul>
+        <li>The name you enter.</li>
+        <li>Your answers to the 17 questions.</li>
+        <li>Your listening setup: headphones or speakers, the kind and model you describe, and your
+          estimate of your volume level.</li>
+        <li>How you used the test: which sounds you played, how many times and for how long, and the
+          time spent on each page.</li>
+        <li>Your browser and device type (for example "Safari on iPhone"), so we can account for
+          differences in playback.</li>
+      </ul>
+
+      <h3>What we don't record</h3>
+      <ul>
+        <li>No audio: the site never uses your microphone or camera.</li>
+        <li>No location, contacts, or anything else stored on your device.</li>
+        <li>No advertising or tracking cookies, and no browsing activity outside this test.</li>
+      </ul>
+
+      <h3>How it is used and stored</h3>
+      <ul>
+        <li>Your responses are used only for this research. Results are reported as group
+          statistics; names are never published.</li>
+        <li>Responses are sent over an encrypted connection to a private spreadsheet that only the
+          research team can access.</li>
+        <li>A copy of your progress is kept in this browser so nothing is lost if the page reloads.</li>
+      </ul>
+
+      <h3>Questions</h3>
+      <p>Taking part is voluntary, and you can stop at any time. If you have questions about the study
+        or want your responses removed, please contact the research team.</p>
+
+      <button id="privacy-close" type="button" class="primary">Close</button>
+    </dialog>
 
     <!-- Listening setup -->
     <section id="screen-setup" class="screen" hidden>
@@ -124,8 +180,8 @@
 
     <!-- Review -->
     <section id="screen-review" class="screen" hidden>
-      <h1>Review your answers</h1>
-      <p class="lede">Tap a question to go back to it.</p>
+      <h1>All questions</h1>
+      <p class="lede">Tap a question to go to it. Submit when you have finished.</p>
       <ol id="review-list" class="review-list"></ol>
       <p id="review-warning" class="warning" hidden></p>
       <fieldset id="volume-changed">
