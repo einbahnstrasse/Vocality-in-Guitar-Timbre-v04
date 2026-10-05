@@ -15,5 +15,5 @@ window.CONFIG = {
   PAIR_GAP_SEC: 0.25,
 
   // Written into every response row so results can be traced to a site version.
-  VERSION: 'v04-web-3',
+  VERSION: '4.0.0',
 };

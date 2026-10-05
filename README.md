@@ -1,5 +1,9 @@
 # Vocality-in-Guitar-Timbre-v04
 
+![License](https://img.shields.io/badge/license-MIT-brightgreen)
+![Version](https://img.shields.io/badge/version-4.0.0-blue)
+![Platform](https://img.shields.io/badge/platform-web%20%7C%20mobile-orange)
+
 Mobile web version of the *Vocality in Guitar Timbre* listening test, ported from the Max patch
 `V.3_Vocality_in_Guitar_Timbre.maxpat`. A plain static site (HTML/CSS/JS, no build step), hosted on
 GitHub Pages, that records each participant's answers to a Google Sheet.
