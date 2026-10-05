@@ -580,6 +580,7 @@
     state.volumeChanged = changed.value;
     state.status = 'complete';
     state.completedAt = new Date().toISOString();
+    state.synced = false;                    // the completed version still has to be sent
     saveState();
     showDone();
   });

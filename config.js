@@ -1,6 +1,6 @@
 // Site settings. Edit these; nothing else needs to change for routine updates.
 window.CONFIG = {
-  // Paste the Google Apps Script "Web app" URL here (see README → "Google Sheet setup").
+  // Paste the Google Apps Script "Web app" URL here (see README → "The Google Sheet" → "First-time setup").
   // Leave empty to run without saving (answers are logged to the browser console).
   SHEET_URL: 'https://script.google.com/macros/s/AKfycby2cnTBZqojHDYyH-yfbgr1xF2fKoRhxXvpnkd68FiuOYsg6BeOghb_oLKswPam639w/exec',
 
