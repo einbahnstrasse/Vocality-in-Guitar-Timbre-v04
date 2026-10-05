@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>Vocality in Guitar Timbre</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+
+    <!-- Registration -->
+    <section id="screen-register" class="screen" hidden>
+      <h1>Vocality in Guitar Timbre</h1>
+      <p class="lede">A listening test of 17 questions in two parts.</p>
+      <ul class="intro">
+        <li><strong>Part 1:</strong> choose which of the following sounds most resembles the test sample.</li>
+        <li><strong>Part 2:</strong> choose which guitar sound most closely matches the vowel sound.</li>
+        <li>Play every sound as many times as you like, in any order, before answering.</li>
+        <li>Headphones are best. On a phone, turn off silent mode.</li>
+      </ul>
+      <form id="register-form" autocomplete="off">
+        <label>Last name
+          <input name="lastName" required autocapitalize="characters" spellcheck="false">
+        </label>
+        <label>First name
+          <input name="firstName" required autocapitalize="words" spellcheck="false">
+        </label>
+        <button type="submit" class="primary">Continue</button>
+      </form>
+    </section>
+
+    <!-- Listening setup -->
+    <section id="screen-setup" class="screen" hidden>
+      <h1>Your listening setup</h1>
+      <p class="lede">A few questions about how you're listening, then a volume check.</p>
+      <form id="setup-form" autocomplete="off">
+
+        <fieldset>
+          <legend>Are you listening on headphones?</legend>
+          <label class="check"><input type="radio" name="listening" value="headphones" required> Yes, headphones or earbuds</label>
+          <label class="check"><input type="radio" name="listening" value="speakers"> No, speakers</label>
+        </fieldset>
+
+        <div id="setup-headphones" hidden>
+          <fieldset>
+            <legend>What kind of headphones?</legend>
+            <label class="check"><input type="radio" name="hpType" value="over-ear"> Over-ear (cups around the ear)</label>
+            <label class="check"><input type="radio" name="hpType" value="on-ear"> On-ear (pads rest on the ear)</label>
+            <label class="check"><input type="radio" name="hpType" value="in-ear"> In-ear (earbuds)</label>
+            <label class="check"><input type="radio" name="hpType" value="other"> Other</label>
+          </fieldset>
+          <fieldset>
+            <legend>How are they connected?</legend>
+            <label class="check"><input type="radio" name="connection" value="wired"> Wired</label>
+            <label class="check"><input type="radio" name="connection" value="wireless"> Wireless (Bluetooth)</label>
+            <label class="check"><input type="radio" name="connection" value="not sure"> Not sure</label>
+          </fieldset>
+        </div>
+
+        <div id="setup-speakers" hidden>
+          <fieldset>
+            <legend>What are you listening through?</legend>
+            <label class="check"><input type="radio" name="spType" value="phone"> Phone or tablet speaker</label>
+            <label class="check"><input type="radio" name="spType" value="laptop"> Laptop built-in speakers</label>
+            <label class="check"><input type="radio" name="spType" value="computer speakers"> Desktop computer speakers</label>
+            <label class="check"><input type="radio" name="spType" value="studio monitors"> Studio monitors</label>
+            <label class="check"><input type="radio" name="spType" value="home stereo"> Home stereo / hi-fi</label>
+            <label class="check"><input type="radio" name="spType" value="tv or soundbar"> TV or soundbar</label>
+            <label class="check"><input type="radio" name="spType" value="other"> Other</label>
+          </fieldset>
+        </div>
+
+        <label id="setup-model" hidden><span id="setup-model-label">Make and model, or a short description</span>
+          <input name="model" spellcheck="false">
+        </label>
+
+        <fieldset>
+          <legend>Set your volume</legend>
+          <p class="help">Play the sound below and adjust your device's volume until it is clearly audible
+            and comfortable. Then <strong>keep the volume the same</strong> for the rest of the test.</p>
+          <button id="ref-btn" class="play" type="button">
+            <span class="icon" aria-hidden="true"></span><span>Play volume reference</span>
+          </button>
+        </fieldset>
+
+        <fieldset>
+          <legend>Roughly what is your device's volume set to?</legend>
+          <p class="help">Your volume indicator shows this when you press a volume key.</p>
+          <div class="slider-row">
+            <input type="range" name="volume" min="0" max="100" step="5" value="50" aria-label="Device volume, percent">
+            <output id="volume-out">50%</output>
+          </div>
+          <label class="check"><input type="checkbox" name="volumeUnknown"> I don't know</label>
+        </fieldset>
+
+        <p id="setup-error" class="warning" hidden></p>
+        <button type="submit" class="primary">Start the test</button>
+      </form>
+    </section>
+
+    <!-- Question -->
+    <section id="screen-question" class="screen" hidden>
+      <header class="q-head">
+        <div class="q-meta"><span id="q-part"></span> · Question <span id="q-num"></span> of <span id="q-total"></span></div>
+        <nav id="progress" class="progress" aria-label="Questions"></nav>
+      </header>
+      <p id="q-instructions" class="instructions"></p>
+
+      <button id="test-btn" class="play test" type="button">
+        <span class="icon" aria-hidden="true"></span><span class="label"></span>
+      </button>
+
+      <h2 id="q-prompt" class="prompt"></h2>
+      <div id="options" class="options"></div>
+
+      <footer class="q-nav">
+        <button id="prev-btn" type="button">Previous</button>
+        <button id="next-btn" type="button" class="primary">Next</button>
+      </footer>
+    </section>
+
+    <!-- Review -->
+    <section id="screen-review" class="screen" hidden>
+      <h1>Review your answers</h1>
+      <p class="lede">Tap a question to go back to it.</p>
+      <ol id="review-list" class="review-list"></ol>
+      <p id="review-warning" class="warning" hidden></p>
+      <fieldset id="volume-changed">
+        <legend>Did you change your volume during the test?</legend>
+        <label class="check"><input type="radio" name="volumeChanged" value="no"> No</label>
+        <label class="check"><input type="radio" name="volumeChanged" value="yes"> Yes</label>
+        <label class="check"><input type="radio" name="volumeChanged" value="not sure"> Not sure</label>
+      </fieldset>
+      <p id="review-error" class="warning" hidden></p>
+      <footer class="q-nav">
+        <button id="review-back" type="button">Back</button>
+        <button id="submit-btn" type="button" class="primary">Submit</button>
+      </footer>
+    </section>
+
+    <!-- Done -->
+    <section id="screen-done" class="screen" hidden>
+      <h1>Done!</h1>
+      <p class="lede">Thank you for taking part.</p>
+      <p id="done-status" class="status-line"></p>
+      <div id="fallback" hidden>
+        <p>Your answers could not be sent. Please copy the text below and email it to the researcher.</p>
+        <textarea id="fallback-text" readonly rows="6"></textarea>
+        <div class="row">
+          <button id="retry-btn" type="button" class="primary">Try sending again</button>
+          <button id="copy-btn" type="button">Copy</button>
+        </div>
+      </div>
+      <button id="new-participant" type="button" class="subtle">Start a new participant</button>
+    </section>
+
+    <p id="sync" class="sync" aria-live="polite"></p>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="questions.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
